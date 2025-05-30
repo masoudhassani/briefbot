@@ -1,0 +1,73 @@
+app:
+  name: "BriefBot"
+  version: "1.0.0"
+  environment: "development"
+  debug: true
+  log_level: "INFO"
+
+# News sources configuration
+sources:
+  newsapi:
+    enabled: true
+    rate_limit: 1000  # requests per day
+    timeout: 30
+    retry_count: 3
+    base_url: "https://newsapi.org/v2"
+    custom_headers:
+      User-Agent: "NewsAggregator/1.0"
+  
+  reddit:
+    enabled: true
+    rate_limit: 60  # requests per minute
+    timeout: 30
+    retry_count: 2
+    subreddits:
+      - "technology"
+      - "MachineLearning"
+      - "artificial"
+      - "programming"
+      - "startups"
+      - "cryptocurrency"
+    custom_headers:
+      User-Agent: "NewsBot/1.0"
+  
+  rss:
+    enabled: true
+    rate_limit: 100
+    timeout: 20
+    retry_count: 2
+    feeds:
+      - "https://feeds.feedburner.com/oreilly/radar"
+      - "https://rss.cnn.com/rss/edition.rss"
+      - "https://feeds.bbci.co.uk/news/technology/rss.xml"
+      - "https://techcrunch.com/feed/"
+      - "https://www.wired.com/feed/rss"
+
+# AI/LLM configuration
+ai:
+  anthropic:
+    model: "claude-3-sonnet-20240229"
+    max_tokens: 500
+    temperature: 0.3
+    retry_count: 3
+  
+  summary:
+    max_length: 500
+    include_links: true
+    include_sentiment: false
+    language: "en"
+
+# Notification settings
+notifications:
+  telegram:
+    enabled: true
+    parse_mode: "Markdown"
+    disable_web_page_preview: false
+  
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+  
+  slack:
+    enabled: false
