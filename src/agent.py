@@ -17,10 +17,10 @@ client = OpenAI(api_key=openai_api_key)
 
 
 async def main():
-    server_manager = MCPServerManager("configs/server_configs.json")
-    await server_manager.connect_to_all_servers()
+    # Use the context manager for proper cleanup
+    async with MCPServerManager("configs/server_configs.json") as server_manager:
+        await server_manager.connect_to_all_servers()
 
-    try:
         # Run chatbot loop
         query = input("Enter a query: ")
         messages = [{"role": "user", "content": query}]
@@ -59,8 +59,8 @@ async def main():
                 if len(response.output) == 1:
                     print(response.output[0].content[0].text)
 
-    finally:
-        await server_manager.cleanup()
+    # Cleanup happens automatically when exiting the context manager
+    print("🎉 Chatbot session ended cleanly")
 
 
 if __name__ == "__main__":
