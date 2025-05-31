@@ -6,6 +6,7 @@ from mcp import ClientSession, StdioServerParameters, types
 from mcp.client.stdio import stdio_client
 from typing import List
 import asyncio
+import json
 import nest_asyncio
 from modules.config_manager import ConfigManager
 
@@ -39,13 +40,11 @@ class Agent:
             assistant_content = []
             for content in response.output:
                 if content.type == "message":
-                    print(content.content[0].text)
                     assistant_content.append(content)
                     if len(content.content) == 1:
                         process_query = False
+
                 elif content.type == "function_call":
-                    assistant_content.append(content)
-                    messages.append({"role": "assistant", "content": assistant_content})
                     tool_id = content.call_id
                     tool_args = content.arguments
                     tool_name = content.name
@@ -53,29 +52,22 @@ class Agent:
                     print(f"Calling tool {tool_name} with args {tool_args}")
 
                     # Call a tool
-                    # result = execute_tool(tool_name, tool_args): not anymore needed
-                    # tool invocation through the client session
-                    result = await self.session.call_tool(tool_name, arguments=tool_args)
+                    parsed_args = json.loads(tool_args)
+                    result = await self.session.call_tool(tool_name, arguments=parsed_args)
+
                     messages.append(
                         {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "tool_result",
-                                    "tool_use_id": tool_id,
-                                    "content": result.content,
-                                }
-                            ],
+                            "role": "system",
+                            "content": result.content[0].text,
                         }
                     )
-                    response = self.openai.response.create(
+                    response = self.openai.responses.create(
                         model="gpt-4o-mini",
-                        tools=self.available_tools,
                         input=messages,
                     )
 
-                    if len(response.content) == 1 and response.content[0].type == "text":
-                        print(response.content[0].text)
+                    if len(response.output) == 1:
+                        print(response.output[0].content[0].text)
                         process_query = False
 
     async def chat_loop(self):
@@ -100,7 +92,7 @@ class Agent:
         # Create server parameters for stdio connection
         server_params = StdioServerParameters(
             command="python",  # Executable
-            args=["-m", "servers.math_server"],  # Optional command line arguments
+            args=["-m", "servers.test_server"],  # Optional command line arguments
             env=None,  # Optional environment variables
         )
         async with stdio_client(server_params) as (read, write):
@@ -114,7 +106,7 @@ class Agent:
 
                 tools = response.tools
                 print("\nConnected to server with tools:", [tool.name for tool in tools])
-                print(tools[0].inputSchema)
+
                 self.available_tools = [
                     {
                         "name": tool.name,
@@ -124,7 +116,7 @@ class Agent:
                     }
                     for tool in response.tools
                 ]
-                print("\nAvailable tools:", self.available_tools)
+                # print("\nAvailable tools:", self.available_tools)
 
                 await self.chat_loop()
 
