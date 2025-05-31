@@ -1,0 +1,14 @@
+{
+    "mcpServers": {       
+        "test": {
+            "command": "python",
+            "args": ["-m", "servers.test_server"]
+        },
+        
+        "weather": {
+            "command": "python",
+            "args": ["-m", "servers.weather_server"]
+        }
+    }
+}
+
