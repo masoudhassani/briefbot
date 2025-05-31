@@ -19,174 +19,170 @@ class MCPServerConnection:
         self.session = None
         self.tools = []
         self._connected = False
-        self._connection_task = None
+        self._stdio_context = None
+        self._session_context = None
+        self._read_stream = None
+        self._write_stream = None
 
-    async def _connection_task_runner(self):
-        """Long-running task that maintains the connection"""
+    async def connect(self) -> bool:
+        """Connect to the MCP server and store connection resources"""
+        print(f"\nConnecting to {self.server_name}...")
+
         try:
-            # Create server parameters
             server_params = StdioServerParameters(
                 command=self.server_config["command"],
                 args=self.server_config.get("args", []),
                 env=self.server_config.get("env", None),
             )
 
-            print(f"  📋 Command: {server_params.command} {' '.join(server_params.args)}")
-            print(f"  ⏳ Starting process...")
+            print(f"  Command: {server_params.command} {' '.join(server_params.args)}")
+            print(f"  Starting process...")
 
-            async with asyncio.timeout(15):
-                async with stdio_client(server_params) as (read, write):
-                    print(f"  ✅ Process started for {self.server_name}")
+            # Create stdio context
+            self._stdio_context = stdio_client(server_params)
 
-                    async with ClientSession(read, write) as session:
-                        self.session = session
-                        print(f"  ✅ Session created for {self.server_name}")
+            # Enter stdio context
+            self._read_stream, self._write_stream = await self._stdio_context.__aenter__()
 
-                        # Initialize with retries
-                        print(f"  ⏳ Initializing connection...")
-                        max_retries = 3
-                        for attempt in range(max_retries):
-                            try:
-                                async with asyncio.timeout(10):
-                                    await self.session.initialize()
-                                print(
-                                    f"  ✅ Initialized {self.server_name} (attempt {attempt + 1})"
-                                )
-                                break
-                            except asyncio.TimeoutError:
-                                if attempt < max_retries - 1:
-                                    print(
-                                        f"  ⚠️  Initialization timeout, retrying... (attempt {attempt + 1})"
-                                    )
-                                    await asyncio.sleep(1)
-                                else:
-                                    raise
-                            except Exception as e:
-                                if attempt < max_retries - 1:
-                                    print(
-                                        f"  ⚠️  Initialization error: {e}, retrying... (attempt {attempt + 1})"
-                                    )
-                                    await asyncio.sleep(1)
-                                else:
-                                    raise
+            # Create and enter session context
+            self._session_context = ClientSession(self._read_stream, self._write_stream)
+            self.session = await self._session_context.__aenter__()
 
-                        # Get tools
-                        print(f"  ⏳ Fetching server capabilities...")
-                        try:
-                            async with asyncio.timeout(8):
-                                response = await self.session.list_tools()
+            print(f"  Session created for {self.server_name}")
 
-                            tools = response.tools if hasattr(response, "tools") else []
-                            print(f"  ✅ Retrieved {len(tools)} tools from {self.server_name}")
-
-                            # Process tools
-                            for tool in tools:
-                                tool_def = {
-                                    "name": tool.name,
-                                    "type": "function",
-                                    "description": tool.description
-                                    or f"Tool from {self.server_name} server",
-                                    "parameters": getattr(tool, "inputSchema", {}) or {},
-                                    "server": self.server_name,
-                                }
-                                self.tools.append(tool_def)
-                                print(f"    📦 {tool.name}: {tool.description}")
-
-                        except Exception as e:
-                            print(f"  ⚠️  Error getting tools from {self.server_name}: {e}")
-
-                        self._connected = True
-                        print(f"  🎉 Successfully connected to {self.server_name}")
-
-                        # Keep connection alive until cancelled
-                        try:
-                            while self._connected:
-                                await asyncio.sleep(1)
-                        except asyncio.CancelledError:
-                            print(f"  🔌 Connection task cancelled for {self.server_name}")
-                            raise
-
-        except asyncio.CancelledError:
-            print(f"  🔌 Connection cancelled for {self.server_name}")
-            raise
-        except Exception as e:
-            print(f"  ❌ Connection error for {self.server_name}: {e}")
-        finally:
-            self._connected = False
-            self.session = None
-            print(f"  ✅ Connection cleanup complete for {self.server_name}")
-
-    async def connect(self) -> bool:
-        """Connect to the MCP server"""
-        print(f"\n🔄 Connecting to {self.server_name}...")
-
-        try:
-            # Start the connection task
-            self._connection_task = asyncio.create_task(self._connection_task_runner())
-
-            # Wait for connection to be established
-            max_wait = 20  # seconds
-            start_time = asyncio.get_event_loop().time()
-
-            while not self._connected and not self._connection_task.done():
-                if asyncio.get_event_loop().time() - start_time > max_wait:
-                    print(f"  ⏰ Connection timeout for {self.server_name}")
-                    await self.disconnect()
-                    return False
-
-                await asyncio.sleep(0.1)
-
-            if self._connection_task.done() and not self._connected:
-                # Task finished but not connected - there was an error
+            # Initialize session with retries
+            print(f"  Initializing connection...")
+            max_retries = 3
+            for attempt in range(max_retries):
                 try:
-                    await self._connection_task  # This will raise the exception
+                    async with asyncio.timeout(10):
+                        await self.session.initialize()
+                    print(f"  Initialized {self.server_name} (attempt {attempt + 1})")
+                    break
                 except Exception as e:
-                    print(f"  ❌ Connection task failed for {self.server_name}: {e}")
-                return False
+                    if attempt < max_retries - 1:
+                        print(f"  Retry {attempt + 1} after error: {e}")
+                        await asyncio.sleep(1)
+                    else:
+                        raise
 
-            return self._connected
+            # Fetch tools
+            print(f"  Fetching server capabilities...")
+            try:
+                async with asyncio.timeout(8):
+                    response = await self.session.list_tools()
+
+                tools = response.tools if hasattr(response, "tools") else []
+                print(f"  Retrieved {len(tools)} tools from {self.server_name}")
+
+                self.tools.clear()
+                for tool in tools:
+                    self.tools.append(
+                        {
+                            "name": tool.name,
+                            "type": "function",
+                            "description": tool.description
+                            or f"Tool from {self.server_name} server",
+                            "parameters": getattr(tool, "inputSchema", {}) or {},
+                            "server": self.server_name,
+                        }
+                    )
+                    print(f"    {tool.name}: {tool.description}")
+
+            except Exception as e:
+                print(f"  Error getting tools from {self.server_name}: {e}")
+
+            self._connected = True
+            print(f"  Successfully connected to {self.server_name}")
+            return True
 
         except Exception as e:
-            print(f"  ❌ Failed to connect to {self.server_name}: {e}")
+            print(f"  Failed to connect to {self.server_name}: {e}")
             await self.disconnect()
             return False
 
     async def disconnect(self):
-        """Disconnect from the server"""
-        if not self._connected and not self._connection_task:
+        """Disconnect from the server with proper cleanup"""
+        if not self._connected and not self._session_context and not self._stdio_context:
             return
 
-        print(f"  🔌 Disconnecting {self.server_name}...")
+        print(f"  Disconnecting {self.server_name}...")
+
+        # Mark as disconnected first to prevent new operations
         self._connected = False
 
-        if self._connection_task and not self._connection_task.done():
-            self._connection_task.cancel()
-            try:
-                await self._connection_task
-            except asyncio.CancelledError:
-                pass
-            except Exception as e:
-                print(f"  ⚠️  Error during disconnect: {e}")
+        try:
+            # Close session context first
+            if self._session_context:
+                try:
+                    await self._session_context.__aexit__(None, None, None)
+                    print(f"  Session context closed for {self.server_name}")
+                except asyncio.CancelledError:
+                    print(f"  Session cleanup cancelled for {self.server_name}")
+                except Exception as e:
+                    print(f"  Warning: Error closing session context for {self.server_name}: {e}")
+                finally:
+                    self._session_context = None
+                    self.session = None
 
-        self.session = None
-        self._connection_task = None
-        print(f"  ✅ Disconnected {self.server_name}")
+            # Close stdio context
+            if self._stdio_context:
+                try:
+                    await self._stdio_context.__aexit__(None, None, None)
+                    print(f"  Stdio context closed for {self.server_name}")
+                except asyncio.CancelledError:
+                    print(f"  Stdio cleanup cancelled for {self.server_name}")
+                except Exception as e:
+                    print(f"  Warning: Error closing stdio context for {self.server_name}: {e}")
+                finally:
+                    self._stdio_context = None
+                    self._read_stream = None
+                    self._write_stream = None
+
+        except asyncio.CancelledError:
+            print(f"  Disconnect cancelled for {self.server_name}, cleaning up references...")
+            # Clean up references even if cancelled
+            self._session_context = None
+            self.session = None
+            self._stdio_context = None
+            self._read_stream = None
+            self._write_stream = None
+
+        # Clear tools
+        self.tools.clear()
+
+        print(f"  Disconnected {self.server_name}")
 
     async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = {}) -> Optional[Any]:
         """Call a tool on this server"""
         if not self._connected or not self.session:
             raise RuntimeError(f"Server {self.server_name} is not connected")
 
+        if arguments is None:
+            arguments = {}
+
         try:
-            result = await self.session.call_tool(tool_name, arguments or {})
+            print(f"  Calling {tool_name} on {self.server_name}")
+            result = await self.session.call_tool(tool_name, arguments)
             return result
         except Exception as e:
-            print(f"❌ Error calling tool '{tool_name}' on {self.server_name}: {e}")
-            return None
+            print(f"Error calling tool '{tool_name}' on {self.server_name}: {e}")
+            # Check if connection is still alive
+            if not self._connected:
+                print(f"Connection to {self.server_name} appears to be lost")
+            raise
 
     @property
     def is_connected(self) -> bool:
-        return self._connected
+        return self._connected and self.session is not None
+
+    async def __aenter__(self):
+        """Async context manager entry"""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """Async context manager exit with cleanup"""
+        await self.disconnect()
 
 
 class MCPServerManager:
@@ -194,6 +190,7 @@ class MCPServerManager:
         self.config_path = config_path
         self.connections: Dict[str, MCPServerConnection] = {}
         self.all_tools = []
+        self._cleanup_done = False
 
     async def load_config(self) -> Dict[str, Any]:
         """Load MCP server configuration from JSON file"""
@@ -213,30 +210,41 @@ class MCPServerManager:
         config = await self.load_config()
 
         if not config:
-            print("❌ No server configuration found")
+            print("No server configuration found")
             return False
 
-        print(f"🚀 Found {len(config)} servers in configuration")
-        print("🔄 Connecting sequentially for better reliability...")
+        print(f"Found {len(config)} servers in configuration")
+        print("Connecting sequentially for better reliability...")
 
         successful_connections = 0
 
         # Create connections for each server
         for server_name, server_config in config.items():
             connection = MCPServerConnection(server_name, server_config)
-            success = await connection.connect()
 
-            if success:
-                self.connections[server_name] = connection
-                self.all_tools.extend(connection.tools)
-                successful_connections += 1
+            try:
+                success = await connection.connect()
+
+                if success:
+                    self.connections[server_name] = connection
+                    self.all_tools.extend(connection.tools)
+                    successful_connections += 1
+                else:
+                    print(f"Failed to connect to {server_name}")
+                    # Ensure failed connection is cleaned up
+                    await connection.disconnect()
+
+            except Exception as e:
+                print(f"Error connecting to {server_name}: {e}")
+                # Ensure failed connection is cleaned up
+                await connection.disconnect()
 
             # Small delay between connections
             await asyncio.sleep(0.5)
 
-        print(f"\n🎉 CONNECTION SUMMARY:")
-        print(f"   ✅ Successful: {successful_connections}/{len(config)} servers")
-        print(f"   📦 Total tools: {len(self.all_tools)}")
+        print(f"\nCONNECTION SUMMARY:")
+        print(f"   Successful: {successful_connections}/{len(config)} servers")
+        print(f"   Total tools: {len(self.all_tools)}")
 
         if successful_connections > 0:
             self.print_tools_summary()
@@ -246,7 +254,7 @@ class MCPServerManager:
     def print_tools_summary(self):
         """Print a summary of all available tools grouped by server"""
         print(f"\n{'='*60}")
-        print("🛠️  AVAILABLE TOOLS SUMMARY")
+        print("AVAILABLE TOOLS SUMMARY")
         print(f"{'='*60}")
 
         # Group tools by server
@@ -258,14 +266,17 @@ class MCPServerManager:
             tools_by_server[server].append(tool)
 
         for server_name, tools in tools_by_server.items():
-            print(f"\n📋 {server_name.upper()} ({len(tools)} tools):")
+            print(f"\n{server_name.upper()} ({len(tools)} tools):")
             for tool in tools:
                 print(f"   • {tool['name']}: {tool['description']}")
 
         print(f"\n{'='*60}")
 
-    async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = {}) -> Optional[Any]:
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any] = None) -> Optional[Any]:
         """Call a specific tool by name"""
+        if arguments is None:
+            arguments = {}
+
         # Find which server has this tool
         tool_info = None
         for tool in self.all_tools:
@@ -274,24 +285,29 @@ class MCPServerManager:
                 break
 
         if not tool_info:
-            print(f"❌ Tool '{tool_name}' not found")
+            print(f"Tool '{tool_name}' not found")
             return None
 
         server_name = tool_info["server"]
         if server_name not in self.connections:
-            print(f"❌ Server '{server_name}' not connected")
+            print(f"Server '{server_name}' not connected")
             return None
 
         connection = self.connections[server_name]
+
         if not connection.is_connected:
-            print(f"❌ Server '{server_name}' is not connected")
+            print(f"Server '{server_name}' is not connected")
             return None
 
-        print(f"🔧 Calling {tool_name} on {server_name}...")
-        result = await connection.call_tool(tool_name, arguments)
-        if result:
-            print(f"✅ Tool call successful")
-        return result
+        print(f"Calling {tool_name} on {server_name}...")
+        try:
+            result = await connection.call_tool(tool_name, arguments)
+            if result:
+                print(f"Tool call successful")
+            return result
+        except Exception as e:
+            print(f"Tool call error: {e}")
+            return None
 
     async def get_available_tools_for_openai(self) -> List[Dict[str, Any]]:
         """Get tools in OpenAI-compatible format"""
@@ -312,20 +328,32 @@ class MCPServerManager:
 
     async def cleanup(self):
         """Clean up all connections"""
-        print("\n🧹 Cleaning up connections...")
+        if self._cleanup_done:
+            return
 
-        # Disconnect all connections
-        disconnect_tasks = []
-        for server_name, connection in self.connections.items():
-            if connection.is_connected:
-                disconnect_tasks.append(connection.disconnect())
+        print("\nCleaning up connections...")
+        self._cleanup_done = True
 
-        if disconnect_tasks:
-            await asyncio.gather(*disconnect_tasks, return_exceptions=True)
+        # Disconnect connections one by one to avoid cancellation issues
+        for server_name, connection in list(self.connections.items()):
+            if connection.is_connected or connection._session_context or connection._stdio_context:
+                try:
+                    await connection.disconnect()
+                except asyncio.CancelledError:
+                    print(f"Cleanup cancelled for {server_name}, forcing cleanup...")
+                    # Force immediate cleanup without waiting
+                    connection._connected = False
+                    connection._session_context = None
+                    connection._stdio_context = None
+                    connection.session = None
+                    connection.tools.clear()
+                except Exception as e:
+                    print(f"Warning: Exception during cleanup of {server_name}: {e}")
 
+        # Clear all references
         self.connections.clear()
         self.all_tools.clear()
-        print("🧹 Cleanup complete")
+        print("Cleanup complete")
 
     async def __aenter__(self):
         """Async context manager entry"""
@@ -335,24 +363,34 @@ class MCPServerManager:
         """Async context manager exit with cleanup"""
         await self.cleanup()
 
+    def __del__(self):
+        """Destructor to ensure cleanup if context manager wasn't used"""
+        if hasattr(self, "_cleanup_done") and not self._cleanup_done:
+            print("Warning: MCPServerManager was not properly closed. Use async context manager.")
+
 
 # Example usage
 async def main():
-    async with MCPServerManager("configs/server_configs.json") as manager:
-        # Connect to all servers
-        success = await manager.connect_to_all_servers()
+    try:
+        async with MCPServerManager("configs/server_configs.json") as manager:
+            # Connect to all servers
+            success = await manager.connect_to_all_servers()
 
-        if success:
-            # Get tools for OpenAI API
-            openai_tools = await manager.get_available_tools_for_openai()
-            print(f"\n🤖 Ready for OpenAI integration with {len(openai_tools)} tools")
+            if success:
+                # Get tools for OpenAI API
+                openai_tools = await manager.get_available_tools_for_openai()
+                print(f"\nReady for OpenAI integration with {len(openai_tools)} tools")
 
-            # Example tool call (uncomment to test)
-            # if openai_tools:
-            #     result = await manager.call_tool(openai_tools[0]["name"])
-            #     print(f"Test result: {result}")
-        else:
-            print("❌ No servers connected successfully")
+                # Example tool call (uncomment to test)
+                # if openai_tools:
+                #     result = await manager.call_tool(openai_tools[0]["name"])
+                #     print(f"Test result: {result}")
+            else:
+                print("No servers connected successfully")
+
+    except Exception as e:
+        print(f"Error in main: {e}")
+        raise
 
 
 if __name__ == "__main__":

@@ -16,48 +16,71 @@ model = "gpt-4o-mini"
 client = OpenAI(api_key=openai_api_key)
 
 
+async def process_query(query: str, server_manager: MCPServerManager):
+    messages = [{"role": "user", "content": query}]
+    response = client.responses.create(
+        model="gpt-4o-mini",
+        tools=server_manager.all_tools,
+        input=messages,
+        tool_choice="auto",
+        temperature=0.0,
+    )
+
+    for response_output in response.output:
+        if response_output.type == "message":
+            print(response_output.content[0].text)
+
+        elif response_output.type == "function_call":
+            tool_id = response_output.call_id
+            tool_args = response_output.arguments
+            tool_name = response_output.name
+
+            print(f"Calling tool {tool_name} with args {tool_args}")
+            parsed_args = json.loads(tool_args)
+
+            try:
+                result = await server_manager.call_tool(tool_name, arguments=parsed_args)
+                if result is None:
+                    print("❌ Tool call returned no result")
+                    return
+
+            except RuntimeError as e:
+                print(f"❌ Connection error: {e}")
+                print("🔄 Try reconnecting or restart the application")
+                return
+
+            messages.append(
+                {
+                    "role": "system",
+                    "content": result.content[0].text,
+                }
+            )
+            response = client.responses.create(
+                model="gpt-4o-mini",
+                input=messages,
+            )
+
+            if len(response.output) == 1:
+                print(response.output[0].content[0].text)
+
+
 async def main():
     # Use the context manager for proper cleanup
     async with MCPServerManager("configs/server_configs.json") as server_manager:
         await server_manager.connect_to_all_servers()
+        print("Type 'quit' to exit the chatbot session")
 
-        # Run chatbot loop
-        query = input("Enter a query: ")
-        messages = [{"role": "user", "content": query}]
-        response = client.responses.create(
-            model="gpt-4o-mini",
-            tools=server_manager.all_tools,
-            input=messages,
-            tool_choice="auto",
-            temperature=0.0,
-        )
+        while True:
+            try:
+                query = input("Query: ").strip()
 
-        for response_output in response.output:
-            if response_output.type == "message":
-                print(response_output.content[0].text)
+                if query.lower() == "quit":
+                    break
 
-            elif response_output.type == "function_call":
-                tool_id = response_output.call_id
-                tool_args = response_output.arguments
-                tool_name = response_output.name
+                await process_query(query, server_manager)
 
-                print(f"Calling tool {tool_name} with args {tool_args}")
-                parsed_args = json.loads(tool_args)
-                result = await server_manager.call_tool(tool_name, arguments=parsed_args)
-
-                messages.append(
-                    {
-                        "role": "system",
-                        "content": result.content[0].text,
-                    }
-                )
-                response = client.responses.create(
-                    model="gpt-4o-mini",
-                    input=messages,
-                )
-
-                if len(response.output) == 1:
-                    print(response.output[0].content[0].text)
+            except Exception as e:
+                print(f"Error: {str(e)}")
 
     # Cleanup happens automatically when exiting the context manager
     print("🎉 Chatbot session ended cleanly")
