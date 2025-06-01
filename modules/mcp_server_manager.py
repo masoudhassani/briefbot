@@ -88,7 +88,7 @@ class MCPServerConnection:
                             "server": self.server_name,
                         }
                     )
-                    print(f"    {tool.name}: {tool.description}")
+                    # print(f"    {tool.name}: {tool.description}")
 
             except Exception as e:
                 print(f"  Error getting tools from {self.server_name}: {e}")
@@ -163,7 +163,6 @@ class MCPServerConnection:
             arguments = {}
 
         try:
-            print(f"  Calling {tool_name} on {self.server_name}")
             result = await self.session.call_tool(tool_name, arguments)
             return result
         except Exception as e:

@@ -1,21 +1,21 @@
-topic_templates:
-  ai_research:
+topics:
+  AI:
     keywords: ["artificial intelligence", "machine learning", "deep learning", "LLM", "ChatGPT", "Claude", "GPT"]
     exclude_keywords: ["crypto", "blockchain", "trading"]
     sources: ["newsapi", "reddit", "rss"]
     priority: "high"
-    max_articles_per_source: 15
+    limit: 15
   
-  crypto:
+  Crypto:
     keywords: ["bitcoin", "ethereum", "cryptocurrency", "blockchain", "defi", "web3"]
     exclude_keywords: ["scam", "rug pull", "meme"]
     sources: ["newsapi", "reddit"]
     priority: "medium"
-    max_articles_per_source: 10
+    limit: 10
   
-  tech_general:
+  Tech:
     keywords: ["technology", "startup", "innovation", "software", "programming"]
     exclude_keywords: ["politics", "sports"]
     sources: ["newsapi", "rss"]
     priority: "medium"
-    max_articles_per_source: 8
+    limit: 8

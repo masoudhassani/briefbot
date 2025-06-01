@@ -3,6 +3,10 @@
         "test": {
             "command": "python",
             "args": ["-m", "servers.test_server"]
+        },
+        "news": {
+            "command": "python",
+            "args": ["-m", "servers.news_server"]
         }
     }
 }
