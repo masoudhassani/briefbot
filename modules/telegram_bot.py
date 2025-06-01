@@ -102,7 +102,7 @@ class TelegramBot:
         self.add_command_handler("info", self._info_command)
         self.add_command_handler("status", self._status_command)
         self.add_command_handler("ping", self._ping_command)
-        self.add_message_handler(self._default_message)
+        # self.add_message_handler(self._default_message)
 
     async def _start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Default start command handler."""

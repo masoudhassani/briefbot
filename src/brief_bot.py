@@ -6,6 +6,7 @@ from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI
 from modules.mcp_server_manager import MCPServerManager
+from modules.telegram_bot import TelegramBot
 from modules.utils import load_yaml_config
 from functools import partial
 
@@ -72,37 +73,41 @@ async def telegram_message_handler(
 async def main():
     async with MCPServerManager("configs/server_configs.json") as server_manager:
         await server_manager.connect_to_all_servers()
-        logger.info("All servers connected. Starting Telegram bot.")
+        print("Servers connected, starting Telegram bot...")
 
-        # Pass server_manager to the handler using functools.partial
-        handler_with_manager = MessageHandler(
-            filters.TEXT & ~filters.COMMAND,
-            partial(telegram_message_handler, server_manager=server_manager),
+        # Init your TelegramBot class (do NOT call run() inside)
+        telegram_bot = TelegramBot()
+        # Remove default handlers if you want (optional)
+        # telegram_bot.remove_default_handlers()
+
+        # Add your custom handlers, e.g.:
+        # telegram_bot.add_command_handler("custom", custom_func)
+        # Now inject server_manager into the message handler as before
+
+        # Remove the default message handler and add yours, or override
+        telegram_bot.add_message_handler(
+            partial(telegram_message_handler, server_manager=server_manager)
         )
 
-        app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
-        app.add_handler(handler_with_manager)
+        app = telegram_bot.application
 
-        print("Bot is running... Press Ctrl+C to stop.")
-
-        # Proper async startup and polling loop
         await app.initialize()
         await app.start()
-        await app.updater.start_polling()  # this runs in the background
+        await app.updater.start_polling()
 
-        # Now just block forever (or until interrupted)
         try:
-            await asyncio.Event().wait()  # this keeps the bot running
+            await asyncio.Event().wait()
         except (KeyboardInterrupt, SystemExit):
             print("Received interrupt, shutting down...")
 
-        # Clean shutdown
         await app.updater.stop()
         await app.stop()
         await app.shutdown()
 
     print("Bot stopped and server manager cleaned up.")
 
+
+# Your telegram_message_handler must accept server_manager as param, as before
 
 if __name__ == "__main__":
     asyncio.run(main())
