@@ -47,19 +47,21 @@ async def process_query(query: str, server_manager: MCPServerManager):
                 print("🔄 Try reconnecting or restart the application")
                 return
 
-            messages.append(
-                {
-                    "role": "system",
-                    "content": result,
-                }
-            )
-            response = client.responses.create(
-                model="gpt-4o-mini",
-                input=messages,
-            )
+            if result.get("success") and result.get("content") is not None:
+                content = result.get("content")
+                messages.append(
+                    {
+                        "role": "system",
+                        "content": content,
+                    }
+                )
+                response = client.responses.create(
+                    model="gpt-4o-mini",
+                    input=messages,
+                )
 
-            if len(response.output) == 1:
-                print(response.output[0].content[0].text)
+                if len(response.output) == 1:
+                    print(response.output[0].content[0].text)
 
 
 async def main():

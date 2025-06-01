@@ -3,3 +3,5 @@ mcp[cli]
 fastapi
 openai
 pyaml
+python-telegram-bot
+psutil

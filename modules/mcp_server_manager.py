@@ -5,6 +5,7 @@ from typing import Dict, List, Any, Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from modules.utils import load_json_config
+from modules.data_structure import BooleanMessage, ToolResponse
 
 # Set up logging to see what's happening
 logging.basicConfig(level=logging.ERROR)
@@ -289,24 +290,11 @@ class MCPServerManager:
         print(f"Calling {tool_name} on {server_name}...")
         try:
             result = await connection.call_tool(tool_name, arguments)
-
-            if result is None or len(result.content) == 0:
-                print("❌ Tool call returned no result")
-                return None
-
-            print(f"Tool call successful")
-            contents = ""
-            for content in result.content:
-                if hasattr(content, "text"):
-                    contents += "\n" + content.text
-                else:
-                    contents += "\n" + str(content)
-
-            return contents
+            return self.parse_tool_message(result)
 
         except Exception as e:
             print(f"Tool call error: {e}")
-            return None
+            return ToolResponse.failure(None)
 
     async def get_available_tools_for_openai(self) -> List[Dict[str, Any]]:
         """Get tools in OpenAI-compatible format"""
@@ -366,6 +354,30 @@ class MCPServerManager:
         """Destructor to ensure cleanup if context manager wasn't used"""
         if hasattr(self, "_cleanup_done") and not self._cleanup_done:
             print("Warning: MCPServerManager was not properly closed. Use async context manager.")
+
+    def parse_tool_message(self, result: Any) -> Dict[str, Any]:
+        """Parse a tool message from a string"""
+        if result is None or len(result.content) == 0:
+            print("❌ Tool call returned no result")
+            return ToolResponse.failure(None)
+
+        if result.content[0].text == BooleanMessage.failure:
+            print("❌ Tool call failed")
+            return ToolResponse.failure(None)
+
+        if result.content[0].text == BooleanMessage.success:
+            print("✅ Tool call succeeded")
+            return ToolResponse.success(None)
+
+        contents = ""
+        for content in result.content:
+            if hasattr(content, "text"):
+                contents += "\n" + content.text
+            else:
+                contents += "\n" + str(content)
+
+        print("✅ Tool call succeeded")
+        return ToolResponse.success(contents)
 
 
 # Example usage
