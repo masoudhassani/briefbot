@@ -4,14 +4,15 @@ import json
 from dotenv import load_dotenv
 from openai import OpenAI
 from modules.mcp_server_manager import MCPServerManager
-from modules.config_manager import ConfigManager
+from modules.utils import load_yaml_config
 
 # Load environment variables
 load_dotenv()
 
 # Initialize OpenAI client
-config_manager = ConfigManager()
-openai_api_key = config_manager.get_api_key("openai")
+secrets = load_yaml_config("configs/secrets.yml", "openai")
+openai_api_key = secrets.get("api_key")
+
 model = "gpt-4o-mini"
 client = OpenAI(api_key=openai_api_key)
 

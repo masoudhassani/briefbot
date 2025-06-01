@@ -4,7 +4,7 @@ import requests
 from mcp.server.fastmcp import FastMCP
 
 # Create server
-mcp = FastMCP("Echo Server")
+mcp = FastMCP("Test Server")
 
 
 @mcp.tool()

@@ -1,9 +1,10 @@
 import json
 import asyncio
+import logging
 from typing import Dict, List, Any, Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
-import logging
+from modules.utils import load_json_config
 
 # Set up logging to see what's happening
 logging.basicConfig(level=logging.ERROR)
@@ -192,22 +193,9 @@ class MCPServerManager:
         self.all_tools = []
         self._cleanup_done = False
 
-    async def load_config(self) -> Dict[str, Any]:
-        """Load MCP server configuration from JSON file"""
-        try:
-            with open(self.config_path, "r") as f:
-                config = json.load(f)
-            return config.get("mcpServers", {})
-        except FileNotFoundError:
-            print(f"Configuration file {self.config_path} not found")
-            return {}
-        except json.JSONDecodeError as e:
-            print(f"Error parsing configuration file: {e}")
-            return {}
-
     async def connect_to_all_servers(self):
         """Connect to all servers"""
-        config = await self.load_config()
+        config = load_json_config(self.config_path, "mcpServers")
 
         if not config:
             print("No server configuration found")
