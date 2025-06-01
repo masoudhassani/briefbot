@@ -20,7 +20,7 @@ client = OpenAI(api_key=openai_api_key)
 async def process_query(query: str, server_manager: MCPServerManager):
     messages = [{"role": "user", "content": query}]
     response = client.responses.create(
-        model="gpt-4o-mini",
+        model=model,
         tools=server_manager.all_tools,
         input=messages,
         tool_choice="auto",
@@ -56,12 +56,12 @@ async def process_query(query: str, server_manager: MCPServerManager):
                     }
                 )
                 response = client.responses.create(
-                    model="gpt-4o-mini",
+                    model=model,
                     input=messages,
                 )
 
                 if len(response.output) == 1:
-                    print(response.output[0].content[0].text)
+                    print("\n", response.output[0].content[0].text)
 
 
 async def main():
@@ -72,7 +72,7 @@ async def main():
 
         while True:
             try:
-                query = input("Query: ").strip()
+                query = input("\nQuery: ").strip()
 
                 if query.lower() == "quit":
                     break
