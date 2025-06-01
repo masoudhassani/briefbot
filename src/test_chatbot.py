@@ -41,9 +41,6 @@ async def process_query(query: str, server_manager: MCPServerManager):
 
             try:
                 result = await server_manager.call_tool(tool_name, arguments=parsed_args)
-                if result is None:
-                    print("❌ Tool call returned no result")
-                    return
 
             except RuntimeError as e:
                 print(f"❌ Connection error: {e}")
@@ -53,7 +50,7 @@ async def process_query(query: str, server_manager: MCPServerManager):
             messages.append(
                 {
                     "role": "system",
-                    "content": result.content[0].text,
+                    "content": result,
                 }
             )
             response = client.responses.create(

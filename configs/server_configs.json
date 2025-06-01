@@ -7,6 +7,10 @@
         "news": {
             "command": "python",
             "args": ["-m", "servers.news_server"]
+        },
+        "telegram": {
+            "command": "python",
+            "args": ["-m", "servers.telegram_messenger_server"]
         }
     }
 }

@@ -289,9 +289,21 @@ class MCPServerManager:
         print(f"Calling {tool_name} on {server_name}...")
         try:
             result = await connection.call_tool(tool_name, arguments)
-            if result:
-                print(f"Tool call successful")
-            return result
+
+            if result is None or len(result.content) == 0:
+                print("❌ Tool call returned no result")
+                return None
+
+            print(f"Tool call successful")
+            contents = ""
+            for content in result.content:
+                if hasattr(content, "text"):
+                    contents += "\n" + content.text
+                else:
+                    contents += "\n" + str(content)
+
+            return contents
+
         except Exception as e:
             print(f"Tool call error: {e}")
             return None
