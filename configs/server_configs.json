@@ -16,6 +16,13 @@
             "command": "pipx",
             "args": ["run", "--spec", "git+https://github.com/adhikasp/mcp-reddit.git", "mcp-reddit"],
             "env": {}
+        },
+        "playwright": {
+        "command": "npx",
+        "args": [
+            "@playwright/mcp@latest",
+            "--headless"
+        ]
         }
     }
 }
