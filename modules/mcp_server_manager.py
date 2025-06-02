@@ -287,7 +287,7 @@ class MCPServerManager:
             print(f"Server '{server_name}' is not connected")
             return None
 
-        print(f"Calling {tool_name} on {server_name}...")
+        print(f"Calling {tool_name} on server '{server_name}' with arguments {arguments}...")
         try:
             result = await connection.call_tool(tool_name, arguments)
             return self.parse_tool_message(result)

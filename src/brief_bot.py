@@ -33,7 +33,7 @@ async def openai_query_handler(query: str, server_manager: MCPServerManager):
         tools=server_manager.all_tools,
         input=messages,
         tool_choice="auto",
-        temperature=0.0,
+        temperature=0.5,
     )
     output_text = ""
     for response_output in response.output:
