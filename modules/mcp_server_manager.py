@@ -1,11 +1,16 @@
+import os
 import json
 import asyncio
 import logging
+from dotenv import load_dotenv
 from typing import Dict, List, Any, Optional
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from modules.utils import load_json_config
 from modules.data_structure import BooleanMessage, ToolResponse
+
+# Load environment variables
+load_dotenv()
 
 # Set up logging to see what's happening
 logging.basicConfig(level=logging.ERROR)
@@ -31,10 +36,20 @@ class MCPServerConnection:
         print(f"\nConnecting to {self.server_name}...")
 
         try:
+            # update the environment variables if provided
+            raw_env = self.server_config.get("env", {})
+            resolved_env = {
+                key: (
+                    os.getenv(value[2:-1])
+                    if value.startswith("${") and value.endswith("}")
+                    else value
+                )
+                for key, value in raw_env.items()
+            }
             server_params = StdioServerParameters(
                 command=self.server_config["command"],
                 args=self.server_config.get("args", []),
-                env=self.server_config.get("env", None),
+                env=resolved_env,
             )
 
             print(f"  Command: {server_params.command} {' '.join(server_params.args)}")
@@ -208,6 +223,7 @@ class MCPServerManager:
 
         # Create connections for each server
         for server_name, server_config in config.items():
+
             connection = MCPServerConnection(server_name, server_config)
 
             try:
