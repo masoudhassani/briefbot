@@ -46,6 +46,7 @@ class MCPServerConnection:
                 )
                 for key, value in raw_env.items()
             }
+
             server_params = StdioServerParameters(
                 command=self.server_config["command"],
                 args=self.server_config.get("args", []),

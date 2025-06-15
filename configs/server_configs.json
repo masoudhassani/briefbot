@@ -1,8 +1,8 @@
 {
     "mcpServers": {       
-        "test": {
+        "weather": {
             "command": "python",
-            "args": ["-m", "servers.test_server"]
+            "args": ["-m", "servers.weather_server"]
         },
         "news": {
             "command": "python",
@@ -23,7 +23,23 @@
             "@playwright/mcp@latest",
             "--headless"
         ]
-        }
+        },
+        "web3-research-mcp": {
+        "command": "npx",
+        "args": ["-y", "web3-research-mcp@latest"]
+        },
+        "ddg-search": {
+        "command": "npx",
+        "args": ["-y", "@oevortex/ddg_search"]
+        },
+        "redis": {
+        "command": "npx",
+        "args": [
+            "-y",
+            "@modelcontextprotocol/server-redis",
+            "redis://localhost:6379"
+        ]
+        }      
     }
 }
 
