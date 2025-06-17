@@ -34,6 +34,7 @@ You are a helpful and intelligent AI assistant that supports a wide variety of u
 
 ## Time
 - If you need to know the current time, day, month or year, call the available time function to get it
+- If in your tool call, you need to know the current date, call the time tool first and then call your desired tool based on its results.
 
 ## Memory (Redis)
 - Retrieve from Redis if the user query refers to any previously discussed topic or data.
@@ -60,7 +61,7 @@ You are a helpful and intelligent AI assistant that supports a wide variety of u
   3. Analyze the results and generate a **three-paragraph answer**:
      - **First paragraph**: summarize key insights from tool results
      - **Second paragraph**: provide a clear **conclusion**, not just a summary
-     - **Third paragraph**: provide references
+     - **Third paragraph**: provide references with links to the sources you used. 
 
 ## General Restrictions
 - Do not speculate or answer using your own knowledge. Always rely on tool results or stored memory.
@@ -127,6 +128,8 @@ Then, take action and compose a useful, honest, and clear answer that provides v
 
 async def openai_query_handler(query: str, server_manager: MCPServerManager):
     messages = [{"role": "user", "content": instructions.format(query=query)}]
+
+    # Initial response: trigger tool use
     response = client.responses.create(
         model=OPENAI_MODEL,
         tools=server_manager.all_tools,
@@ -134,26 +137,40 @@ async def openai_query_handler(query: str, server_manager: MCPServerManager):
         tool_choice="auto",
         temperature=0.5,
     )
+
+    tool_calls = []
     output_text = ""
+
+    # Collect all tool calls
     for response_output in response.output:
         if response_output.type == "message":
             output_text += response_output.content[0].text
         elif response_output.type == "function_call":
-            tool_name = response_output.name
-            tool_args = json.loads(response_output.arguments)
-            try:
-                result = await server_manager.call_tool(tool_name, arguments=tool_args)
-            except RuntimeError as e:
-                return f"Connection error: {e}\nTry reconnecting or restart the application."
-            if result.get("success") and result.get("content"):
-                content = result["content"]
-                messages.append({"role": "system", "content": content})
-                followup_response = client.responses.create(
-                    model=OPENAI_MODEL,
-                    input=messages,
-                )
-                if followup_response.output and followup_response.output[0].content:
-                    output_text += "\n" + followup_response.output[0].content[0].text
+            tool_calls.append(response_output)
+
+    # Run all tools and append results to messages
+    for tool_call in tool_calls:
+        tool_name = tool_call.name
+        tool_args = json.loads(tool_call.arguments)
+        try:
+            result = await server_manager.call_tool(tool_name, arguments=tool_args)
+        except RuntimeError as e:
+            return f"Connection error: {e}\nTry reconnecting or restart the application."
+
+        if result.get("success") and result.get("content"):
+            messages.append(
+                {"role": "system", "content": f"{tool_name} output: {result['content']}"}
+            )
+
+    # If any tools were used, send a final follow-up query to synthesize all results
+    if tool_calls:
+        followup_response = client.responses.create(
+            model=OPENAI_MODEL,
+            input=messages,
+        )
+        if followup_response.output and followup_response.output[0].content:
+            output_text = followup_response.output[0].content[0].text
+
     return output_text.strip() if output_text else "Sorry, I could not get a response."
 
 
