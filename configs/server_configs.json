@@ -8,6 +8,10 @@
             "command": "python",
             "args": ["-m", "servers.news_server"]
         },
+        "time": {
+            "command": "python",
+            "args": ["-m", "servers.time_server"]
+        },
         "telegram": {
             "command": "python",
             "args": ["-m", "servers.telegram_messenger_server"]

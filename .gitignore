@@ -174,3 +174,6 @@ cython_debug/
 .pypirc
 
 secrets.yml
+.env
+gcp-oauth.keys.json
+temp.json
